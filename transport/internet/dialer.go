@@ -10,6 +10,7 @@ import (
 	"github.com/xtls/xray-core/common/session"
 	"github.com/xtls/xray-core/features/dns"
 	"github.com/xtls/xray-core/features/outbound"
+	"github.com/xtls/xray-core/nekoutils"
 	"github.com/xtls/xray-core/transport"
 	"github.com/xtls/xray-core/transport/internet/stat"
 	"github.com/xtls/xray-core/transport/pipe"
@@ -131,7 +132,13 @@ func redirect(ctx context.Context, dst net.Destination, obt string) net.Conn {
 }
 
 // DialSystem calls system dialer to create a network connection.
-func DialSystem(ctx context.Context, dest net.Destination, sockopt *SocketConfig) (net.Conn, error) {
+func DialSystem(ctx context.Context, dest net.Destination, sockopt *SocketConfig) (conn net.Conn, err error) {
+	defer func() {
+		if conn != nil {
+			conn = nekoutils.ConnectionPool_System.StartNetConn(conn, nekoutils.CorePtrFromContext(ctx))
+		}
+	}()
+
 	var src net.Address
 	if outbound := session.OutboundFromContext(ctx); outbound != nil {
 		src = outbound.Gateway
