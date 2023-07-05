@@ -50,6 +50,8 @@ type Inbound struct {
 	Conn net.Conn
 	// Timer of the inbound buf copier. May be nil.
 	Timer *signal.ActivityTimer
+	// UID for Matsuri
+	Uid uint32
 }
 
 // Outbound is the metadata of an outbound connection.

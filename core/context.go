@@ -51,3 +51,7 @@ func ToBackgroundDetachedContext(ctx context.Context) context.Context {
 	instance := MustFromContext(ctx)
 	return toContext(context.Background(), instance)
 }
+
+func WithContext(ctx context.Context, v *Instance) context.Context {
+	return toContext(ctx, v)
+}
