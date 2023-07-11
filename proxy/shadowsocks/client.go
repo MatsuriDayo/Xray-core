@@ -14,6 +14,7 @@ import (
 	"github.com/xtls/xray-core/common/task"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/features/policy"
+	"github.com/xtls/xray-core/proxy/shadowsocks/plugin"
 	"github.com/xtls/xray-core/transport"
 	"github.com/xtls/xray-core/transport/internet"
 	"github.com/xtls/xray-core/transport/internet/stat"
@@ -23,6 +24,9 @@ import (
 type Client struct {
 	serverPicker  protocol.ServerPicker
 	policyManager policy.Manager
+	//
+	obfsFunc plugin.ObfsFunc
+	v2ray    *plugin.V2rayPlugin
 }
 
 // NewClient create a new Shadowsocks client.
@@ -43,6 +47,16 @@ func NewClient(ctx context.Context, config *ClientConfig) (*Client, error) {
 	client := &Client{
 		serverPicker:  protocol.NewRoundRobinServerPicker(serverList),
 		policyManager: v.GetFeature(policy.ManagerType()).(policy.Manager),
+	}
+	if config.Plugin != "" {
+		if serverList.Size() > 1 {
+			return nil, newError("only 1 server for plugin")
+		}
+		var err error
+		client.obfsFunc, client.v2ray, err = plugin.NewPlugin(config.Plugin, config.PluginOpts, client.serverPicker.PickServer())
+		if err != nil {
+			return nil, err
+		}
 	}
 	return client, nil
 }
@@ -83,8 +97,15 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 		Address: destination.Address,
 		Port:    destination.Port,
 	}
+	if c.v2ray != nil {
+		request.Address = net.LocalHostIP
+		request.Port = net.Port(c.v2ray.LocalPort)
+	}
 	if destination.Network == net.Network_TCP {
 		request.Command = protocol.RequestCommandTCP
+		if c.obfsFunc != nil {
+			conn = c.obfsFunc(conn)
+		}
 	} else {
 		request.Command = protocol.RequestCommandUDP
 	}
@@ -192,6 +213,14 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 		return nil
 	}
 
+	return nil
+}
+
+// Close implements common.Closable.Close().
+func (c *Client) Close() error {
+	if c.v2ray != nil {
+		c.v2ray.Core.Close()
+	}
 	return nil
 }
 

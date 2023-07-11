@@ -3,6 +3,7 @@ module github.com/xtls/xray-core
 go 1.20
 
 require (
+	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/ghodss/yaml v1.0.1-0.20220118164431-d8423dcdf344
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3

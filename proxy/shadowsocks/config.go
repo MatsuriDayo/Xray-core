@@ -5,8 +5,14 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/md5"
+	"crypto/rc4"
 	"crypto/sha1"
 	"io"
+	"strings"
+
+	"github.com/aead/chacha20"
+	"github.com/aead/chacha20/chacha"
+	"golang.org/x/crypto/blowfish"
 
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/antireplay"
@@ -73,6 +79,12 @@ func (a *Account) getCipher() (Cipher, error) {
 			IVBytes:         16,
 			AEADAuthCreator: createAesGcm,
 		}, nil
+	case CipherType_AES_192_GCM:
+		return &AEADCipher{
+			KeyBytes:        24,
+			IVBytes:         24,
+			AEADAuthCreator: createAesGcm,
+		}, nil
 	case CipherType_AES_256_GCM:
 		return &AEADCipher{
 			KeyBytes:        32,
@@ -92,7 +104,118 @@ func (a *Account) getCipher() (Cipher, error) {
 			AEADAuthCreator: createXChaCha20Poly1305,
 		}, nil
 	case CipherType_NONE:
-		return NoneCipher{}, nil
+		return &NoneCipher{}, nil
+	// https://shadowsocks.org/guide/stream.html
+	case CipherType_AES_128_CTR:
+		return &StreamCipher{
+			KeyBytes:       16,
+			IVBytes:        aes.BlockSize,
+			EncryptCreator: blockStream(aes.NewCipher, cipher.NewCTR),
+			DecryptCreator: blockStream(aes.NewCipher, cipher.NewCTR),
+		}, nil
+	case CipherType_AES_192_CTR:
+		return &StreamCipher{
+			KeyBytes:       24,
+			IVBytes:        aes.BlockSize,
+			EncryptCreator: blockStream(aes.NewCipher, cipher.NewCTR),
+			DecryptCreator: blockStream(aes.NewCipher, cipher.NewCTR),
+		}, nil
+	case CipherType_AES_256_CTR:
+		return &StreamCipher{
+			KeyBytes:       32,
+			IVBytes:        aes.BlockSize,
+			EncryptCreator: blockStream(aes.NewCipher, cipher.NewCTR),
+			DecryptCreator: blockStream(aes.NewCipher, cipher.NewCTR),
+		}, nil
+	case CipherType_AES_128_CFB:
+		return &StreamCipher{
+			KeyBytes:       16,
+			IVBytes:        aes.BlockSize,
+			EncryptCreator: blockStream(aes.NewCipher, cipher.NewCFBEncrypter),
+			DecryptCreator: blockStream(aes.NewCipher, cipher.NewCFBDecrypter),
+		}, nil
+	case CipherType_AES_192_CFB:
+		return &StreamCipher{
+			KeyBytes:       24,
+			IVBytes:        aes.BlockSize,
+			EncryptCreator: blockStream(aes.NewCipher, cipher.NewCFBEncrypter),
+			DecryptCreator: blockStream(aes.NewCipher, cipher.NewCFBDecrypter),
+		}, nil
+	case CipherType_AES_256_CFB:
+		return &StreamCipher{
+			KeyBytes:       32,
+			IVBytes:        aes.BlockSize,
+			EncryptCreator: blockStream(aes.NewCipher, cipher.NewCFBEncrypter),
+			DecryptCreator: blockStream(aes.NewCipher, cipher.NewCFBDecrypter),
+		}, nil
+	case CipherType_RC4:
+		return &StreamCipher{
+			KeyBytes: 16,
+			IVBytes:  0,
+			EncryptCreator: func(key []byte, iv []byte) (cipher.Stream, error) {
+				return rc4.NewCipher(key)
+			},
+			DecryptCreator: func(key []byte, iv []byte) (cipher.Stream, error) {
+				return rc4.NewCipher(key)
+			},
+		}, nil
+	case CipherType_RC4_MD5:
+		return &StreamCipher{
+			KeyBytes: 16,
+			IVBytes:  16,
+			EncryptCreator: func(key []byte, iv []byte) (cipher.Stream, error) {
+				h := md5.New()
+				h.Write(key)
+				h.Write(iv)
+				return rc4.NewCipher(h.Sum(nil))
+			},
+			DecryptCreator: func(key []byte, iv []byte) (cipher.Stream, error) {
+				h := md5.New()
+				h.Write(key)
+				h.Write(iv)
+				return rc4.NewCipher(h.Sum(nil))
+			},
+		}, nil
+	case CipherType_BF_CFB:
+		return &StreamCipher{
+			KeyBytes:       16,
+			IVBytes:        blowfish.BlockSize,
+			EncryptCreator: blockStream(func(key []byte) (cipher.Block, error) { return blowfish.NewCipher(key) }, cipher.NewCFBEncrypter),
+			DecryptCreator: blockStream(func(key []byte) (cipher.Block, error) { return blowfish.NewCipher(key) }, cipher.NewCFBDecrypter),
+		}, nil
+	case CipherType_CHACHA20:
+		return &StreamCipher{
+			KeyBytes: chacha.KeySize,
+			IVBytes:  chacha.NonceSize,
+			EncryptCreator: func(key []byte, iv []byte) (cipher.Stream, error) {
+				return chacha20.NewCipher(iv, key)
+			},
+			DecryptCreator: func(key []byte, iv []byte) (cipher.Stream, error) {
+				return chacha20.NewCipher(iv, key)
+			},
+		}, nil
+	case CipherType_CHACHA20_IETF:
+		return &StreamCipher{
+			KeyBytes: chacha.KeySize,
+			IVBytes:  chacha.INonceSize,
+			EncryptCreator: func(key []byte, iv []byte) (cipher.Stream, error) {
+				return chacha20.NewCipher(iv, key)
+			},
+			DecryptCreator: func(key []byte, iv []byte) (cipher.Stream, error) {
+				return chacha20.NewCipher(iv, key)
+			},
+		}, nil
+	case CipherType_XCHACHA20:
+		return &StreamCipher{
+			KeyBytes: chacha.KeySize,
+			IVBytes:  chacha.XNonceSize,
+			EncryptCreator: func(key []byte, iv []byte) (cipher.Stream, error) {
+				return chacha20.NewCipher(iv, key)
+			},
+			DecryptCreator: func(key []byte, iv []byte) (cipher.Stream, error) {
+				return chacha20.NewCipher(iv, key)
+			},
+		}, nil
 	default:
 		return nil, newError("Unsupported cipher.")
 	}
@@ -126,6 +249,8 @@ type Cipher interface {
 	EncodePacket(key []byte, b *buf.Buffer) error
 	DecodePacket(key []byte, b *buf.Buffer) error
 }
+
+var _ Cipher = (*AEADCipher)(nil)
 
 type AEADCipher struct {
 	KeyBytes        int32
@@ -196,45 +321,140 @@ func (c *AEADCipher) DecodePacket(key []byte, b *buf.Buffer) error {
 	return nil
 }
 
-type NoneCipher struct{}
+type StreamCipher struct {
+	KeyBytes       int32
+	IVBytes        int32
+	EncryptCreator func(key []byte, iv []byte) (cipher.Stream, error)
+	DecryptCreator func(key []byte, iv []byte) (cipher.Stream, error)
+}
 
-func (NoneCipher) KeySize() int32 { return 0 }
-func (NoneCipher) IVSize() int32  { return 0 }
-func (NoneCipher) IsAEAD() bool {
+func blockStream(blockCreator func(key []byte) (cipher.Block, error), streamCreator func(block cipher.Block, iv []byte) cipher.Stream) func([]byte, []byte) (cipher.Stream, error) {
+	return func(key []byte, iv []byte) (cipher.Stream, error) {
+		block, err := blockCreator(key)
+		if err != nil {
+			return nil, err
+		}
+		return streamCreator(block, iv), err
+	}
+}
+
+func (*StreamCipher) IsAEAD() bool {
 	return false
 }
 
-func (NoneCipher) NewDecryptionReader(key []byte, iv []byte, reader io.Reader) (buf.Reader, error) {
+func (v *StreamCipher) KeySize() int32 {
+	return v.KeyBytes
+}
+
+func (v *StreamCipher) IVSize() int32 {
+	return v.IVBytes
+}
+
+func (v *StreamCipher) NewEncryptionWriter(key []byte, iv []byte, writer io.Writer) (buf.Writer, error) {
+	stream, err := v.EncryptCreator(key, iv)
+	if err != nil {
+		return nil, err
+	}
+	return &buf.SequentialWriter{Writer: crypto.NewCryptionWriter(stream, writer)}, nil
+}
+
+func (v *StreamCipher) NewDecryptionReader(key []byte, iv []byte, reader io.Reader) (buf.Reader, error) {
+	stream, err := v.DecryptCreator(key, iv)
+	if err != nil {
+		return nil, err
+	}
+	return &buf.SingleReader{Reader: crypto.NewCryptionReader(stream, reader)}, nil
+}
+
+func (v *StreamCipher) EncodePacket(key []byte, b *buf.Buffer) error {
+	iv := b.BytesTo(v.IVSize())
+	stream, err := v.EncryptCreator(key, iv)
+	if err != nil {
+		return err
+	}
+	stream.XORKeyStream(b.BytesFrom(v.IVSize()), b.BytesFrom(v.IVSize()))
+	return nil
+}
+
+func (v *StreamCipher) DecodePacket(key []byte, b *buf.Buffer) error {
+	if b.Len() <= v.IVSize() {
+		return newError("insufficient data: ", b.Len())
+	}
+	iv := b.BytesTo(v.IVSize())
+	stream, err := v.DecryptCreator(key, iv)
+	if err != nil {
+		return err
+	}
+	stream.XORKeyStream(b.BytesFrom(v.IVSize()), b.BytesFrom(v.IVSize()))
+	b.Advance(v.IVSize())
+	return nil
+}
+
+var _ Cipher = (*NoneCipher)(nil)
+
+type NoneCipher struct{}
+
+func (*NoneCipher) KeySize() int32 { return 16 }
+func (*NoneCipher) IVSize() int32  { return 0 }
+func (*NoneCipher) IsAEAD() bool {
+	return false
+}
+
+func (*NoneCipher) NewDecryptionReader(key []byte, iv []byte, reader io.Reader) (buf.Reader, error) {
 	return buf.NewReader(reader), nil
 }
 
-func (NoneCipher) NewEncryptionWriter(key []byte, iv []byte, writer io.Writer) (buf.Writer, error) {
+func (*NoneCipher) NewEncryptionWriter(key []byte, iv []byte, writer io.Writer) (buf.Writer, error) {
 	return buf.NewWriter(writer), nil
 }
 
-func (NoneCipher) EncodePacket(key []byte, b *buf.Buffer) error {
+func (*NoneCipher) EncodePacket(key []byte, b *buf.Buffer) error {
 	return nil
 }
 
-func (NoneCipher) DecodePacket(key []byte, b *buf.Buffer) error {
+func (*NoneCipher) DecodePacket(key []byte, b *buf.Buffer) error {
 	return nil
+}
+
+func CipherFromString(c string) CipherType {
+	c = strings.ToUpper(c)
+	c = strings.ReplaceAll(c, "-", "_")
+	if c == "PLAIN" || c == "DUMMY" {
+		c = "NONE"
+	}
+	if c == "XCHACHA20_IETF_POLY1305" {
+		c = "CHACHA20_POLY1305"
+	}
+	if c == "XCHACHA20_IETF_POLY1305" {
+		c = "XCHACHA20_POLY1305"
+	}
+	return CipherType(CipherType_value[c])
 }
 
 func passwordToCipherKey(password []byte, keySize int32) []byte {
-	key := make([]byte, 0, keySize)
+	const md5Len = 16
 
-	md5Sum := md5.Sum(password)
-	key = append(key, md5Sum[:]...)
+	cnt := (int(keySize)-1)/md5Len + 1
+	m := make([]byte, cnt*md5Len)
+	copy(m, md5sum(password))
 
-	for int32(len(key)) < keySize {
-		md5Hash := md5.New()
-		common.Must2(md5Hash.Write(md5Sum[:]))
-		common.Must2(md5Hash.Write(password))
-		md5Hash.Sum(md5Sum[:0])
-
-		key = append(key, md5Sum[:]...)
+	// Repeatedly call md5 until bytes generated is enough.
+	// Each call to md5 uses data: prev md5 sum + password.
+	d := make([]byte, md5Len+len(password))
+	start := 0
+	for i := 1; i < cnt; i++ {
+		start += md5Len
+		copy(d, m[start-md5Len:start])
+		copy(d[md5Len:], password)
+		copy(m[start:], md5sum(d))
 	}
-	return key
+	return m[:keySize]
+}
+
+func md5sum(d []byte) []byte {
+	h := md5.New()
+	h.Write(d)
+	return h.Sum(nil)
 }
 
 func hkdfSHA1(secret, salt, outKey []byte) {

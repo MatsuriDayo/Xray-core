@@ -80,4 +80,7 @@ import (
 
 	// Commands
 	_ "github.com/xtls/xray-core/main/commands/all"
+
+	// Custom
+	_ "github.com/xtls/xray-core/proxy/shadowsocks/plugin/v2ray_plugin"
 )
