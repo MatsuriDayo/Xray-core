@@ -422,7 +422,7 @@ func CipherFromString(c string) CipherType {
 	if c == "PLAIN" || c == "DUMMY" {
 		c = "NONE"
 	}
-	if c == "XCHACHA20_IETF_POLY1305" {
+	if c == "CHACHA20_IETF_POLY1305" {
 		c = "CHACHA20_POLY1305"
 	}
 	if c == "XCHACHA20_IETF_POLY1305" {
