@@ -7,40 +7,35 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
-
-	"github.com/xtls/xray-core/core"
-	"github.com/xtls/xray-core/proxy/dokodemo"
-	"github.com/xtls/xray-core/proxy/shadowsocks/plugin"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/xtls/xray-core/app/dispatcher"
+	vlog "github.com/xtls/xray-core/app/log"
 	"github.com/xtls/xray-core/app/proxyman"
 	_ "github.com/xtls/xray-core/app/proxyman/inbound"
 	_ "github.com/xtls/xray-core/app/proxyman/outbound"
-
+	clog "github.com/xtls/xray-core/common/log"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/platform/filesystem"
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/serial"
-
+	"github.com/xtls/xray-core/core"
+	"github.com/xtls/xray-core/proxy/dokodemo"
 	"github.com/xtls/xray-core/proxy/freedom"
-
+	"github.com/xtls/xray-core/proxy/shadowsocks/plugin"
 	"github.com/xtls/xray-core/transport/internet"
 	"github.com/xtls/xray-core/transport/internet/grpc"
 	"github.com/xtls/xray-core/transport/internet/quic"
 	"github.com/xtls/xray-core/transport/internet/tls"
 	"github.com/xtls/xray-core/transport/internet/websocket"
-
-	vlog "github.com/xtls/xray-core/app/log"
-	clog "github.com/xtls/xray-core/common/log"
 )
 
 func createConfig(pluginOpts plugin.Args, s *protocol.ServerSpec, lport int) (*core.Config, error) {
-	var tls bool
+	var useTls bool
 	var cert, certRaw string
 
 	if _, loaded := pluginOpts.Get("tls"); loaded {
-		tls = true
+		useTls = true
 	}
 	if certPath, certLoaded := pluginOpts.Get("cert"); certLoaded {
 		cert = certPath
@@ -74,7 +69,7 @@ func createConfig(pluginOpts plugin.Args, s *protocol.ServerSpec, lport int) (*c
 	}
 
 	d := s.Destination()
-	return generateConfig(lport, int(d.Port), d.Address.String(), mode, path, host, cert, certRaw, mux, tls, serviceName, "info")
+	return generateConfig(lport, int(d.Port), d.Address.String(), mode, path, host, cert, certRaw, mux, useTls, serviceName, "info")
 }
 
 // from xray-plugin
