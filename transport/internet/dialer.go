@@ -135,7 +135,7 @@ func redirect(ctx context.Context, dst net.Destination, obt string) net.Conn {
 func DialSystem(ctx context.Context, dest net.Destination, sockopt *SocketConfig) (conn net.Conn, err error) {
 	defer func() {
 		if conn != nil {
-			conn = nekoutils.ConnectionPool_System.StartNetConn(conn, nekoutils.CorePtrFromContext(ctx))
+			conn = nekoutils.ConnectionPool_System.StartNetConn(conn, 0)
 		}
 	}()
 
