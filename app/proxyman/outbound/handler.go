@@ -213,7 +213,6 @@ func (h *Handler) Dispatch(ctx context.Context, link *transport.Link) {
 				common.Interrupt(link.Writer)
 			}
 		}
-		outbound := session.OutboundFromContext(ctx)
 		if outbound.Target.Network == net.Network_UDP && outbound.Target.Port == 443 {
 			switch h.udp443 {
 			case "reject":
